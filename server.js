@@ -1,4 +1,4 @@
-// server.js (Final Version with Tutor Notifications)
+// server.js (Final Version with All Tutor Notifications)
 const express = require('express');
 const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
@@ -30,9 +30,7 @@ app.use(express.json());
 // GET endpoint to fetch available slots
 app.get('/api/available-slots', async (req, res) => {
     const { date } = req.query;
-    if (!date) {
-        return res.status(400).json({ error: 'A date query parameter is required.' });
-    }
+    if (!date) return res.status(400).json({ error: 'A date query parameter is required.' });
     const dayOfWeek = new Date(date + 'T00:00:00').getDay();
     const sessionDuration = 60;
     try {
@@ -63,7 +61,7 @@ app.get('/api/available-slots', async (req, res) => {
 });
 
 
-// POST endpoint to request a booking
+// POST endpoint to request a booking (UPDATED to Bcc tutor)
 app.post('/request-booking', async (req, res) => {
     const { timeSlot, name, email, subjects, price } = req.body;
     if (!timeSlot || !name || !email || !subjects || price === undefined) {
@@ -79,6 +77,7 @@ app.post('/request-booking', async (req, res) => {
         const mailOptions = {
             from: process.env.SENDER_EMAIL,
             to: email,
+            bcc: process.env.SENDER_EMAIL, // **NEW:** Send a copy to yourself
             subject: 'Your Tutoring Session is Booked!',
             html: `<h1>Booking Confirmation</h1><p>Hi ${name},</p><p>Your tutoring session for <strong>${subjectsString}</strong> is confirmed for:</p><p><strong>${new Date(timeSlot).toLocaleString()}</strong></p><p>The meeting location is: [YOUR MEETING ADDRESS OR ONLINE LINK HERE]</p><p>Total amount due at session: $${price.toFixed(2)}</p><p>Thank you!</p>`
         };
@@ -120,8 +119,8 @@ app.delete('/api/cancel-booking', async (req, res) => {
         const canceledBooking = result.rows[0];
         const mailOptions = {
             from: process.env.SENDER_EMAIL,
-            to: email, // Send confirmation to the client
-            bcc: process.env.SENDER_EMAIL, // **NEW:** Send a copy to yourself
+            to: email,
+            bcc: process.env.SENDER_EMAIL,
             subject: 'Your Tutoring Session Has Been Canceled',
             html: `<h1>Booking Canceled</h1><p>Hi ${canceledBooking.client_name},</p><p>This is a confirmation that your tutoring session for <strong>${new Date(canceledBooking.session_datetime).toLocaleString()}</strong> has been successfully canceled.</p><p>We hope to see you again soon!</p>`
         };
