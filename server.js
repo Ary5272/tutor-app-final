@@ -79,7 +79,7 @@ app.post('/request-booking', async (req, res) => {
             to: email,
             bcc: process.env.SENDER_EMAIL, // **NEW:** Send a copy to yourself
             subject: 'Your Tutoring Session is Booked!',
-            html: `<h1>Booking Confirmation</h1><p>Hi ${name},</p><p>Your tutoring session for <strong>${subjectsString}</strong> is confirmed for:</p><p><strong>${new Date(timeSlot).toLocaleString()}</strong></p><p>The meeting location is: [YOUR MEETING ADDRESS OR ONLINE LINK HERE]</p><p>Total amount due at session: $${price.toFixed(2)}</p><p>Thank you!</p>`
+            html: `<h1>Booking Confirmation</h1><p>Hi ${name},</p><p>Your tutoring session for <strong>${subjectsString}</strong> is confirmed for:</p><p><strong>${new Date(timeSlot).toLocaleString()}</strong></p><p>The meeting location is: [117 Satterfield Circle]</p><p>Total amount due at session: $${price.toFixed(2)}</p><p>Thank you!</p>`
         };
         transporter.sendMail(mailOptions, (error, info) => {
             if (error) console.error("Error sending email:", error);
