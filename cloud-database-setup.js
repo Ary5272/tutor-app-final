@@ -1,13 +1,11 @@
-// cloud-database-setup.js (Simplified for Render)
+// cloud-database-setup.js
 const { Pool } = require('pg');
-require('dotenv').config(); // To read .env file for local testing
+require('dotenv').config();
 
-// Render provides the DATABASE_URL automatically in production.
-// For local testing, you might need a .env file with your own Postgres URL.
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  console.error("Database URL not found. Make sure it's set in your environment variables.");
+  console.error("Database URL not found. Make sure it's set in your .env file.");
   process.exit(1);
 }
 

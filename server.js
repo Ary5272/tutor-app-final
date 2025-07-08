@@ -1,4 +1,4 @@
-// server.js (Updated for Brevo)
+// server.js (Final Version with Correct Email Logic)
 const express = require('express');
 const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
@@ -6,18 +6,18 @@ const nodemailer = require('nodemailer');
 const app = express();
 const PORT = process.env.PORT || 4242;
 
-// --- Nodemailer Setup for Brevo ---
+// --- Nodemailer Setup ---
+// The transporter uses your BREVO LOGIN credentials to authenticate.
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: process.env.SMTP_PORT,
     auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
+        user: process.env.SMTP_USER, // Your Brevo account login email
+        pass: process.env.SMTP_PASS  // Your Brevo SMTP Key
+    }
 });
 
 // --- Database Setup ---
-// ... the rest of your server.js file remains exactly the same
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -28,12 +28,10 @@ const pool = new Pool({
 app.use(express.static('public'));
 app.use(express.json());
 
-// GET endpoint to fetch available slots
+// ... (The /api/available-slots endpoint is unchanged) ...
 app.get('/api/available-slots', async (req, res) => {
     const { date } = req.query;
-    if (!date) {
-        return res.status(400).json({ error: 'A date query parameter is required.' });
-    }
+    if (!date) return res.status(400).json({ error: 'A date query parameter is required.' });
     const dayOfWeek = new Date(date + 'T00:00:00').getDay();
     const sessionDuration = 60;
     try {
@@ -63,8 +61,7 @@ app.get('/api/available-slots', async (req, res) => {
     }
 });
 
-
-// POST endpoint to request a booking (sends email)
+// POST endpoint to request a booking
 app.post('/request-booking', async (req, res) => {
     const { timeSlot, name, email, subjects, price } = req.body;
     if (!timeSlot || !name || !email || !subjects || price === undefined) {
@@ -77,34 +74,21 @@ app.post('/request-booking', async (req, res) => {
     try {
         await pool.query(sql, params);
         
-        // --- Send Confirmation Email ---
         const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: email, // Send to the client who booked
+            from: process.env.SENDER_EMAIL, // The "From" address must be your VERIFIED sender
+            to: email,
             subject: 'Your Tutoring Session is Booked!',
-            html: `<h1>Booking Confirmation</h1>
-                   <p>Hi ${name},</p>
-                   <p>Your tutoring session for <strong>${subjectsString}</strong> is confirmed for:</p>
-                   <p><strong>${new Date(timeSlot).toLocaleString()}</strong></p>
-                   <p>The meeting location is: [YOUR MEETING ADDRESS OR ONLINE LINK HERE]</p>
-                   <p>Total amount due at session: $${price.toFixed(2)}</p>
-                   <p>Thank you!</p>`
+            html: `<h1>Booking Confirmation</h1><p>Hi ${name},</p><p>Your session is confirmed for <strong>${new Date(timeSlot).toLocaleString()}</strong>.</p><p>Meeting Location: [YOUR ADDRESS / LINK]</p>`
         };
         transporter.sendMail(mailOptions, (error, info) => {
-            if (error) {
-                console.error("Error sending email:", error);
-            } else {
-                console.log("Confirmation email sent:", info.response);
-            }
+            if (error) console.error("Error sending email:", error);
+            else console.log("Confirmation email sent:", info.response);
         });
-        // -----------------------------
 
         res.status(201).json({ success: true });
     } catch (err) {
         console.error("Database error on booking:", err);
-        if (err.code === '23505') {
-            return res.status(409).json({ error: 'Sorry, this time slot was just booked by someone else.' });
-        }
+        if (err.code === '23505') return res.status(409).json({ error: 'Sorry, this time slot was just booked.' });
         res.status(500).json({ error: 'Could not process your booking.' });
     }
 });
@@ -112,9 +96,7 @@ app.post('/request-booking', async (req, res) => {
 // GET endpoint to find bookings by email
 app.get('/api/bookings', async (req, res) => {
     const { email } = req.query;
-    if (!email) {
-        return res.status(400).json({ error: 'Email is required.' });
-    }
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
     try {
         const result = await pool.query("SELECT * FROM bookings WHERE client_email = $1 ORDER BY session_datetime ASC", [email]);
         res.json(result.rows);
@@ -124,35 +106,26 @@ app.get('/api/bookings', async (req, res) => {
     }
 });
 
-// DELETE endpoint to cancel a booking (sends email)
+// DELETE endpoint to cancel a booking
 app.delete('/api/cancel-booking', async (req, res) => {
     const { bookingId, email } = req.body;
-    if (!bookingId || !email) {
-        return res.status(400).json({ error: 'Booking ID and email are required.' });
-    }
+    if (!bookingId || !email) return res.status(400).json({ error: 'Booking ID and email are required.' });
     try {
         const result = await pool.query("DELETE FROM bookings WHERE id = $1 AND client_email = $2 RETURNING *", [bookingId, email]);
         
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Booking not found or email does not match.' });
-        }
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Booking not found or email does not match.' });
 
-        // --- Send Cancellation Email ---
         const canceledBooking = result.rows[0];
         const mailOptions = {
-            from: process.env.EMAIL_USER,
+            from: process.env.SENDER_EMAIL, // The "From" address must be your VERIFIED sender
             to: email,
             subject: 'Your Tutoring Session Has Been Canceled',
-            html: `<h1>Booking Canceled</h1>
-                   <p>Hi ${canceledBooking.client_name},</p>
-                   <p>This is a confirmation that your tutoring session for <strong>${new Date(canceledBooking.session_datetime).toLocaleString()}</strong> has been successfully canceled.</p>
-                   <p>We hope to see you again soon!</p>`
+            html: `<h1>Booking Canceled</h1><p>Hi ${canceledBooking.client_name},</p><p>Your session for <strong>${new Date(canceledBooking.session_datetime).toLocaleString()}</strong> has been canceled.</p>`
         };
         transporter.sendMail(mailOptions, (error, info) => {
             if (error) console.error("Error sending cancellation email:", error);
             else console.log("Cancellation email sent:", info.response);
         });
-        // -----------------------------
 
         res.status(200).json({ success: true, message: 'Booking canceled successfully.' });
     } catch (err) {
