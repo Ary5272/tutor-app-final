@@ -61,11 +61,8 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // --- Price Configuration ---
-            const BASE_PRICE = 50.00; // Price for 1 subject
-            const ADDITIONAL_SUBJECT_PRICE = 10.00; // Extra cost for each additional subject
-
-            // --- Element References ---
+            const BASE_PRICE = 50.00;
+            const ADDITIONAL_SUBJECT_PRICE = 10.00;
             const datePicker = document.getElementById('date-picker');
             const timeSlotsDiv = document.getElementById('time-slots');
             const slotsHeader = document.getElementById('slots-header');
@@ -78,7 +75,6 @@
             const responseMessage = document.getElementById('response-message');
             const clientNameInput = document.getElementById('client-name');
             const clientEmailInput = document.getElementById('client-email');
-
             let selectedTimeSlot = null;
             let currentPrice = 0;
 
@@ -86,15 +82,12 @@
             datePicker.setAttribute('min', today);
             datePicker.value = today;
             
-            // --- Main Functions ---
             const getSlots = async () => {
                 const selectedDate = datePicker.value;
                 if (!selectedDate) return;
                 resetBookingState();
-
                 const response = await fetch(`/api/available-slots?date=${selectedDate}`);
                 const slots = await response.json();
-
                 if (slots.length === 0) {
                     slotsMessage.textContent = 'No available slots for this day.';
                     slotsMessage.style.display = 'block';
@@ -115,23 +108,22 @@
                 document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
                 slotElement.classList.add('selected');
                 selectedTimeSlot = slotElement.dataset.iso;
-                subjectSelectionDiv.style.display = 'block'; // Show subject selection
-                updatePrice(); // Calculate initial price
+                subjectSelectionDiv.style.display = 'block';
+                updatePrice();
             };
 
             const updatePrice = () => {
                 const selectedSubjects = Array.from(subjectCheckboxes).filter(cb => cb.checked);
                 const count = selectedSubjects.length;
-
                 if (count === 0) {
                     currentPrice = 0;
-                    bookingDetailsDiv.style.display = 'none'; // Hide form if no subjects are chosen
+                    bookingDetailsDiv.style.display = 'none';
                 } else if (count === 1) {
                     currentPrice = BASE_PRICE;
-                    bookingDetailsDiv.style.display = 'block'; // Show form
+                    bookingDetailsDiv.style.display = 'block';
                 } else {
                     currentPrice = BASE_PRICE + (count - 1) * ADDITIONAL_SUBJECT_PRICE;
-                    bookingDetailsDiv.style.display = 'block'; // Show form
+                    bookingDetailsDiv.style.display = 'block';
                 }
                 priceDisplay.textContent = `$${currentPrice.toFixed(2)}`;
                 bookButton.disabled = count === 0;
@@ -141,16 +133,13 @@
                 const name = clientNameInput.value;
                 const email = clientEmailInput.value;
                 const selectedSubjects = Array.from(subjectCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
-
                 if (!selectedTimeSlot || !name || !email || selectedSubjects.length === 0) {
                     responseMessage.className = 'message error';
                     responseMessage.textContent = 'Please select a time, at least one subject, and fill out all details.';
                     return;
                 }
-
                 bookButton.disabled = true;
                 responseMessage.innerHTML = '';
-
                 const response = await fetch('/request-booking', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -162,7 +151,6 @@
                         price: currentPrice
                     })
                 });
-
                 const result = await response.json();
                 if (response.ok) {
                     document.querySelector('section').innerHTML = `
@@ -173,6 +161,7 @@
                             <hr>
                             <p>Total amount due: <strong>$${currentPrice.toFixed(2)}</strong></p>
                             <p>Please pay in person at the start of your session to confirm.</p>
+                            <p style="margin-top: 20px;"><a href="/lookup.html">Need to cancel or view your bookings? Click here.</a></p>
                         </div>`;
                 } else {
                     responseMessage.className = 'message error';
@@ -194,12 +183,10 @@
                 subjectCheckboxes.forEach(cb => cb.checked = false);
             };
 
-            // --- Event Listeners ---
             datePicker.addEventListener('change', getSlots);
             subjectCheckboxes.forEach(checkbox => checkbox.addEventListener('change', updatePrice));
             bookButton.addEventListener('click', bookSession);
             
-            // --- Initial Load ---
             getSlots();
         });
     </script>
