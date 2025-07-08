@@ -1,4 +1,4 @@
-// server.js (Final Version with Correct Email Logic)
+// server.js (Final Version with Tutor Notifications)
 const express = require('express');
 const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
@@ -7,13 +7,12 @@ const app = express();
 const PORT = process.env.PORT || 4242;
 
 // --- Nodemailer Setup ---
-// The transporter uses your BREVO LOGIN credentials to authenticate.
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: process.env.SMTP_PORT,
     auth: {
-        user: process.env.SMTP_USER, // Your Brevo account login email
-        pass: process.env.SMTP_PASS  // Your Brevo SMTP Key
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
     }
 });
 
@@ -28,10 +27,12 @@ const pool = new Pool({
 app.use(express.static('public'));
 app.use(express.json());
 
-// ... (The /api/available-slots endpoint is unchanged) ...
+// GET endpoint to fetch available slots
 app.get('/api/available-slots', async (req, res) => {
     const { date } = req.query;
-    if (!date) return res.status(400).json({ error: 'A date query parameter is required.' });
+    if (!date) {
+        return res.status(400).json({ error: 'A date query parameter is required.' });
+    }
     const dayOfWeek = new Date(date + 'T00:00:00').getDay();
     const sessionDuration = 60;
     try {
@@ -61,6 +62,7 @@ app.get('/api/available-slots', async (req, res) => {
     }
 });
 
+
 // POST endpoint to request a booking
 app.post('/request-booking', async (req, res) => {
     const { timeSlot, name, email, subjects, price } = req.body;
@@ -75,10 +77,10 @@ app.post('/request-booking', async (req, res) => {
         await pool.query(sql, params);
         
         const mailOptions = {
-            from: process.env.SENDER_EMAIL, // The "From" address must be your VERIFIED sender
+            from: process.env.SENDER_EMAIL,
             to: email,
             subject: 'Your Tutoring Session is Booked!',
-            html: `<h1>Booking Confirmation</h1><p>Hi ${name},</p><p>Your session is confirmed for <strong>${new Date(timeSlot).toLocaleString()}</strong>.</p><p>Meeting Location: [YOUR ADDRESS / LINK]</p>`
+            html: `<h1>Booking Confirmation</h1><p>Hi ${name},</p><p>Your tutoring session for <strong>${subjectsString}</strong> is confirmed for:</p><p><strong>${new Date(timeSlot).toLocaleString()}</strong></p><p>The meeting location is: [YOUR MEETING ADDRESS OR ONLINE LINK HERE]</p><p>Total amount due at session: $${price.toFixed(2)}</p><p>Thank you!</p>`
         };
         transporter.sendMail(mailOptions, (error, info) => {
             if (error) console.error("Error sending email:", error);
@@ -117,10 +119,11 @@ app.delete('/api/cancel-booking', async (req, res) => {
 
         const canceledBooking = result.rows[0];
         const mailOptions = {
-            from: process.env.SENDER_EMAIL, // The "From" address must be your VERIFIED sender
-            to: email,
+            from: process.env.SENDER_EMAIL,
+            to: email, // Send confirmation to the client
+            bcc: process.env.SENDER_EMAIL, // **NEW:** Send a copy to yourself
             subject: 'Your Tutoring Session Has Been Canceled',
-            html: `<h1>Booking Canceled</h1><p>Hi ${canceledBooking.client_name},</p><p>Your session for <strong>${new Date(canceledBooking.session_datetime).toLocaleString()}</strong> has been canceled.</p>`
+            html: `<h1>Booking Canceled</h1><p>Hi ${canceledBooking.client_name},</p><p>This is a confirmation that your tutoring session for <strong>${new Date(canceledBooking.session_datetime).toLocaleString()}</strong> has been successfully canceled.</p><p>We hope to see you again soon!</p>`
         };
         transporter.sendMail(mailOptions, (error, info) => {
             if (error) console.error("Error sending cancellation email:", error);
