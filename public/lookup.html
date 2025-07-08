@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find My Bookings</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f9; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+        section { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 100%; max-width: 600px; }
+        h2 { text-align: center; color: #333; }
+        #lookup-form { display: flex; gap: 10px; }
+        #lookup-form input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        #lookup-form button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #bookings-list { margin-top: 2rem; }
+        .booking-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 1rem; }
+        .booking-item-details { flex-grow: 1; }
+        .booking-item button { background-color: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+        .message { text-align: center; padding: 1rem; margin-top: 1rem; border-radius: 4px; font-weight: bold; }
+        .error { color: #721c24; background-color: #f8d7da; }
+    </style>
+</head>
+<body>
+    <main>
+        <section>
+            <h2>Find & Manage Your Bookings</h2>
+            <div id="lookup-form">
+                <input type="email" id="email-input" placeholder="Enter your email address" required>
+                <button id="find-btn">Find My Bookings</button>
+            </div>
+
+            <div id="bookings-list">
+                </div>
+            <div id="message-area"></div>
+        </section>
+    </main>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const findBtn = document.getElementById('find-btn');
+            const emailInput = document.getElementById('email-input');
+            const bookingsList = document.getElementById('bookings-list');
+            const messageArea = document.getElementById('message-area');
+
+            const findBookings = async () => {
+                const email = emailInput.value.trim();
+                if (!email) {
+                    messageArea.innerHTML = `<p class="message error">Please enter an email address.</p>`;
+                    return;
+                }
+
+                bookingsList.innerHTML = '';
+                messageArea.innerHTML = '<p>Searching...</p>';
+                
+                try {
+                    const response = await fetch(`/api/bookings?email=${encodeURIComponent(email)}`);
+                    const bookings = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(bookings.error || 'Failed to fetch bookings.');
+                    }
+
+                    if (bookings.length === 0) {
+                        messageArea.innerHTML = `<p class="message">No bookings found for this email.</p>`;
+                        return;
+                    }
+                    
+                    messageArea.innerHTML = ''; // Clear searching message
+                    bookings.forEach(booking => {
+                        const bookingDiv = document.createElement('div');
+                        bookingDiv.className = 'booking-item';
+                        bookingDiv.innerHTML = `
+                            <div class="booking-item-details">
+                                <strong>${booking.subjects}</strong>
+                                <br>
+                                <span>${new Date(booking.session_datetime).toLocaleString()}</span>
+                            </div>
+                            <button class="cancel-btn" data-id="${booking.id}">Cancel</button>
+                        `;
+                        bookingsList.appendChild(bookingDiv);
+                    });
+                } catch (err) {
+                    messageArea.innerHTML = `<p class="message error">${err.message}</p>`;
+                }
+            };
+
+            const cancelBooking = async (e) => {
+                if (!e.target.classList.contains('cancel-btn')) return;
+
+                const bookingId = e.target.dataset.id;
+                const email = emailInput.value.trim();
+                
+                if (!confirm('Are you sure you want to cancel this booking?')) return;
+
+                try {
+                    const response = await fetch('/api/cancel-booking', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId: bookingId, email: email })
+                    });
+                    
+                    const result = await response.json();
+                    if (!response.ok) {
+                        throw new Error(result.error || 'Failed to cancel booking.');
+                    }
+                    
+                    // Refresh the list to show the booking has been removed
+                    findBookings();
+
+                } catch (err) {
+                    messageArea.innerHTML = `<p class="message error">${err.message}</p>`;
+                }
+            };
+
+            findBtn.addEventListener('click', findBookings);
+            bookingsList.addEventListener('click', cancelBooking);
+        });
+    </script>
+</body>
+</html>

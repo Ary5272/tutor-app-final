@@ -1,11 +1,10 @@
-// server.js (Final Version for Cloud Database)
+// server.js (Updated with Cancellation Feature)
 const express = require('express');
 const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 4242;
 
-// Use the DATABASE_URL from the environment variables on Render
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -22,7 +21,6 @@ app.get('/api/available-slots', async (req, res) => {
         return res.status(400).json({ error: 'A date query parameter is required.' });
     }
     
-    // In PostgreSQL, Sunday is 0, Monday is 1, etc.
     const dayOfWeek = new Date(date + 'T00:00:00').getDay();
     const sessionDuration = 60;
 
@@ -81,6 +79,40 @@ app.post('/request-booking', async (req, res) => {
             return res.status(409).json({ error: 'Sorry, this time slot was just booked by someone else.' });
         }
         res.status(500).json({ error: 'Could not process your booking.' });
+    }
+});
+
+// NEW: Endpoint to find bookings by email
+app.get('/api/bookings', async (req, res) => {
+    const { email } = req.query;
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required.' });
+    }
+    try {
+        const result = await pool.query("SELECT * FROM bookings WHERE client_email = $1 ORDER BY session_datetime ASC", [email]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching bookings by email:', err);
+        res.status(500).json({ error: 'Failed to retrieve bookings.' });
+    }
+});
+
+// NEW: Endpoint to cancel a booking
+app.delete('/api/cancel-booking', async (req, res) => {
+    const { bookingId, email } = req.body;
+    if (!bookingId || !email) {
+        return res.status(400).json({ error: 'Booking ID and email are required.' });
+    }
+    try {
+        // We include the email to ensure a user can only delete their own bookings
+        const result = await pool.query("DELETE FROM bookings WHERE id = $1 AND client_email = $2", [bookingId, email]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Booking not found or email does not match.' });
+        }
+        res.status(200).json({ success: true, message: 'Booking canceled successfully.' });
+    } catch (err) {
+        console.error('Error canceling booking:', err);
+        res.status(500).json({ error: 'Failed to cancel booking.' });
     }
 });
 
